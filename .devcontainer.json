@@ -1,0 +1,9 @@
+{
+  "name": "Pony",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "containerEnv": {
+    "SHELL": "/bin/bash"
+  }
+}
