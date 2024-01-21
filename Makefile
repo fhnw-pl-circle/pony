@@ -1,12 +1,31 @@
-fundamentals: src/fundamentals/*
-	corral fetch
-	@mkdir -p build/
-	corral run -- ponyc -Dopenssl_3.0.x --debug --output build src/fundamentals
+build = build/
+src = src/
 
-rover: src/rover/*
+.PHONY: fundamentals rover clean
+
+all: fundamentals rover server-test
+
+debug: FLAGS=--debug
+debug: all
+
+fundamentals: $(build)fundamentals
+rover: $(build)rover
+server-test: $(build)server-test
+
+$(build)fundamentals: $(src)fundamentals/*
 	corral fetch
-	@mkdir -p build/
-	corral run -- ponyc --debug --output build src/rover
+	@mkdir -p $(build)
+	corral run -- ponyc -Dopenssl_3.0.x $(FLAGS) --output $(build) $(src)fundamentals
+
+$(build)rover: $(src)rover/*
+	corral fetch
+	@mkdir -p $(build)
+	corral run -- ponyc --debug --output $(FLAGS) $(src)rover
+
+$(build)server-test: $(src)server-test/*
+	corral fetch
+	@mkdir -p $(build)
+	corral run -- ponyc -Dopenssl_3.0.x $(FLAGS) --output $(build) $(src)server-test
 
 clean:
 	corral clean

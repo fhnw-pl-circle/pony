@@ -25,10 +25,15 @@ use "json"
 use "net"
 use "promises"
 use "serialise"
+use "math"
+use "cli"
+
 
 use @printf[I32](fmt: Pointer[U8] tag, ...)
 
-use "lib:curl"
+use "lib:curl" if linux or osx
+// these booleans are available at compile time:
+// windows, freebsd, osx, posix, x86, arm, lp64, llp64, ilp32, native128, debug
 
 use @curl_version[Pointer[U8]]()
 use @curl_easy_init[Pointer[_CURL]]()
@@ -37,21 +42,45 @@ use @curl_easy_perform[U8](curl: Pointer[_CURL])
 
 actor Main
   new create(env: Env) =>
-    let cmd = try
-      env.args(1)?
-    else
-      env.out.print("Please select an example: ")
-      env.out.print("typing, reference-caps, object-caps, errors, object-literals, maths, c-ffi, network")
-      return
-    end
+    let cs = 
+      try
+        let parent = CommandSpec.parent("examples")?
+        for name in [
+          "typing"; "reference-caps"; "object-caps"; "errors"
+          "object-literals"; "maths"; "c-ffi"; "network"
+          "serialize"; "debug"; "methods"
+          ].values() do
+          parent.add_command(
+            CommandSpec.leaf(name)?
+          )?
+        end
+        parent.>add_help()?
+      else
+        env.exitcode(-1)
+        return
+      end
 
-    match cmd
+    let cmd =
+      match CommandParser(cs).parse(env.args, env.vars)
+      | let c: Command => c
+      | let ch: CommandHelp =>
+          ch.print_help(env.out)
+          env.exitcode(0)
+          return
+      | let se: SyntaxError =>
+          env.out.print(se.string())
+          env.exitcode(1)
+          return
+      end
+
+    match cmd.spec().name()
       | "typing" => TypingExample(env)
       | "reference-caps" => ReferenceCapsExample(env)
       | "object-caps" => ObjectCapsExample(env)
       | "errors" => ErrorExample(env)
       | "object-literals" => ObjectLiteralExample(env)
       | "maths" => MathsExample(env)
+      | "methods" => MethodPassing(env)
       | "c-ffi" => CFFIExample(env)
       | "network" => NetworkExample(env)
       | "serialize" => SerializationExample(env)
@@ -68,7 +97,20 @@ class Foo
     z = z'
 
   fun calc_stuff(a: U32): U32 =>
-    a * x * z
+    takes_stuff(x)
+    if a > 8 then
+       7
+    else
+       a * x * z
+    end
+
+  fun takes_stuff(a: (U32 | String | None)) =>
+    """
+    """
+
+  fun takes_generic[A](a: A)  =>
+    """
+    """
 
 
 actor Actor 
@@ -79,13 +121,18 @@ actor Actor
 
   be do_stuff(x: U32 val) =>
     env.out.print("I got: " + x.string())
-    
 
 // interfaces can be used for nominal and structural subtyping
 
 class Bar is Stringable
   // Compiler generates an error if we don't provide this method
   fun string(): String iso^ => "Hello".clone()
+
+
+  // Operator overloading
+  fun add(other: OtherBar): OtherBar =>
+    OtherBar
+
 
 class OtherBar
   // Still a "Stringable", but no compiler error if we forget it
@@ -138,11 +185,20 @@ class TypingExample
     U32(1)
 
   fun apply(env: Env) =>
+    let f = recover val Foo(1, 3) end
+    f.takes_stuff(U32(1))
+
+    f.takes_generic[U32](U32(1))
+    f.takes_generic[String iso]("Hallo".clone())
+    f.takes_generic[String]("Hallo")
+
     let a: Bar = Bar
     print(a, env.out)
 
     let b: OtherBar = OtherBar
     print(b, env.out)
+
+    let ab = a + b
 
     let c: Tom ref = Tom
     greet(c, env.out)
@@ -155,6 +211,7 @@ class TypingExample
 
     let left = Left
     takes_direction(left)
+    //taker_color(left)
 
 // Reference capabilities
 
@@ -190,7 +247,7 @@ class ReferenceCapsExample
     let s3: String ref = "This is a reference".clone()
 
     needs_val(s1)
-    needs_val(s1)
+//    needs_val(s3)
 
       // This is not allowed, because we can't guarantee that
       // s2 will not change, but val needs this guarantee
@@ -233,17 +290,25 @@ class ReferenceCapsExample
     // let x2: Sample iso = Sample
     let x2' = recover iso Sample end
     // let x3: Sample val = Sample
+    
+    let s4: String trn = "This is trn".clone()
+    try
+      needs_box(s4)
+      s4.update(1, 'c')?
+      needs_val(consume s4)
+    end
 
     x1.replace("World".clone())
 
 class ObjectCapsExample
   fun apply(env: Env) =>
     let file_name = "hello.txt"
+    // env.root: AmbientAuth
     let path = FilePath(FileAuth(env.root), file_name)
 
     match OpenFile(path)
     | let file: File =>
-      while file.errno() is FileOK do
+      while \likely\ file.errno() is FileOK do
         env.out.write(file.read(1024))
       end
     else
@@ -268,8 +333,43 @@ class ObjectLiteralExample
 
     let l = {(a: String, out: OutStream) => out.print("Lambda: " + a)}
 
+    let l2 = object
+      fun apply(a: String, out: OutStream) => out.print("Lambda" + a)
+    end
+
     l("Hallo", env.out)
 
+
+class MethodHandler
+  fun print(out: OutStream, f: {ref(U32): String}) =>
+    out.print(f(12))
+
+  fun double_print(out: OutStream, f: {ref(U32, F32): String}) =>
+    out.print(f(1, 2.0))
+
+
+class MethodProvider
+  fun double(x: U32): String val =>
+    (x * 2).string()
+
+  fun multiple(x: U32, y: U32): String val=>
+    (x * y).string()
+
+  fun divide(x: U32, y: U32): String val =>
+    (x / y).string()
+
+
+class MethodPassing
+  fun apply(env: Env) =>
+
+    let handler = recover ref MethodHandler end
+    let provider = recover val MethodProvider end
+
+    handler.print(env.out, provider~double())
+    handler.print(env.out, provider~multiple(12))
+
+    handler.print(env.out, provider~multiple(where x = 1))
+    handler.print(env.out, provider~multiple(where y = 13))
 
 class Disposable
 
@@ -349,6 +449,12 @@ class MathsExample
     then
       env.out.print("Done with partials!")
     end
+
+    // Fibonacci 
+    env.out.print("Fibonacci(10) = " + Fibonacci(10).string())
+
+    // GCD
+    env.out.print("GCD(42, 12) = " + try GreatestCommonDivisor[I64](42, 12)?.string() else "??" end)
 
 type Record is (F64 val | I64 val | Bool val | None val | String val | JsonArray ref | JsonObject ref)
 
@@ -508,7 +614,7 @@ class SerializationExample
     let serialise = SerialiseAuth(env.root)
     let output = OutputSerialisedAuth(env.root)
 
-    let x = U64(124)
+    let x = U32(124)
     let sfoo = try Serialised(serialise, x)?
       else
         return
@@ -521,12 +627,12 @@ class SerializationExample
     end
 
 
-
 class DebugExample
 
   fun debug_test() =>
-    Debug.out("This is only printed when compiled --debug")
+    Debug.out("This is only printed when compiled with --debug")
 
   fun apply(env: Env) =>
     debug_test()
+    env.out.print("This is always printed")
     
