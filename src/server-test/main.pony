@@ -8,11 +8,40 @@ use "debug"
 use "promises"
 use "format"
 
+use "regex"
+
+
+actor App
+  var _counter: USize = 0
+
+  be hello(r: Request val, m: Match val, b: ByteArrays, p: Promise[ResponseType]) =>
+    Debug("Called hello")
+    p("Hello World!")
+
+  be echo(r: Request val, m: Match val, b: ByteArrays, p: Promise[ResponseType]) =>
+    Debug("Called echo")
+    p(b)
+
+  be count(r: Request val, m: Match val, b: ByteArrays, p: Promise[ResponseType]) =>
+    Debug("Called count")
+    _counter = _counter + 1
+    p(_counter.string())
+
 actor Main
   new create(env: Env) =>
     let config = ServerConfig("localhost", "8080")
-    let server = MyServer(TCPListenAuth(env.root), config)
     
+    let app = App
+
+    let router = URLRouter
+    try
+      router.add_route(Regex("^\\/hello\\/")?, app~hello())
+      router.add_route(Regex("^\\/echo\\/")?, app~echo())
+      router.add_route(Regex("^\\/count\\/")?, app~count())
+    end
+
+    let server = MySimpleServer(router, TCPListenAuth(env.root), config)
+
 
 
 class MyServerNotify is ServerNotify

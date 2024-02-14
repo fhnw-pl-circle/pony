@@ -1,4 +1,4 @@
-build = build/
+build = build
 src = src/
 
 .PHONY: fundamentals rover clean
@@ -20,7 +20,7 @@ $(build)fundamentals: $(src)fundamentals/*
 $(build)rover: $(src)rover/*
 	corral fetch
 	@mkdir -p $(build)
-	corral run -- ponyc --debug --output $(FLAGS) $(src)rover
+	corral run -- ponyc $(FLAGS) -Dopenssl_3.0.x --output $(build) $(src)rover
 
 $(build)server-test: $(src)server-test/*
 	corral fetch

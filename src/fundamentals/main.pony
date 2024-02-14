@@ -48,7 +48,7 @@ actor Main
         for name in [
           "typing"; "reference-caps"; "object-caps"; "errors"
           "object-literals"; "maths"; "c-ffi"; "network"
-          "serialize"; "debug"; "methods"
+          "serialize"; "debug"; "methods"; "running"
           ].values() do
           parent.add_command(
             CommandSpec.leaf(name)?
@@ -74,17 +74,20 @@ actor Main
       end
 
     match cmd.spec().name()
-      | "typing" => TypingExample(env)
-      | "reference-caps" => ReferenceCapsExample(env)
-      | "object-caps" => ObjectCapsExample(env)
-      | "errors" => ErrorExample(env)
-      | "object-literals" => ObjectLiteralExample(env)
-      | "maths" => MathsExample(env)
-      | "methods" => MethodPassing(env)
-      | "c-ffi" => CFFIExample(env)
-      | "network" => NetworkExample(env)
-      | "serialize" => SerializationExample(env)
-      | "debug" => DebugExample(env)
+    | "typing" => TypingExample(env)
+    | "running" => ActorRunningExample(env)
+    | "reference-caps" => ReferenceCapsExample(env)
+    | "object-caps" => ObjectCapsExample(env)
+    | "errors" => ErrorExample(env)
+    | "object-literals" => ObjectLiteralExample(env)
+    | "maths" => MathsExample(env)
+    | "methods" => MethodPassing(env)
+    | "c-ffi" => CFFIExample(env)
+    | "network" => NetworkExample(env)
+    | "serialize" => SerializationExample(env)
+    | "debug" => DebugExample(env)
+    else
+      env.out.print("Command didn't match...")
     end
 
 
@@ -108,9 +111,11 @@ class Foo
     """
     """
 
-  fun takes_generic[A](a: A)  =>
+  fun takes_generic[A: Stringable box](a: A): String =>
     """
     """
+    a.string()
+
 
 
 actor Actor 
@@ -122,12 +127,13 @@ actor Actor
   be do_stuff(x: U32 val) =>
     env.out.print("I got: " + x.string())
 
+
+
 // interfaces can be used for nominal and structural subtyping
 
 class Bar is Stringable
   // Compiler generates an error if we don't provide this method
   fun string(): String iso^ => "Hello".clone()
-
 
   // Operator overloading
   fun add(other: OtherBar): OtherBar =>
@@ -188,9 +194,8 @@ class TypingExample
     let f = recover val Foo(1, 3) end
     f.takes_stuff(U32(1))
 
-    f.takes_generic[U32](U32(1))
-    f.takes_generic[String iso]("Hallo".clone())
-    f.takes_generic[String]("Hallo")
+    f.takes_generic[U32 box](U32(1))
+    f.takes_generic[String box]("Hallo")
 
     let a: Bar = Bar
     print(a, env.out)
@@ -256,8 +261,10 @@ class ReferenceCapsExample
     needs_val(consume s2)
 
   
-  // But no s2 isn't usable anymore
+  // But now s2 isn't usable anymore
     s2 = "This is iso".clone()
+
+    needs_val(s2 = "This is iso again".clone())
 
     // needs_iso(s2) -- This is not enough!
     needs_iso(consume s2)
@@ -289,6 +296,11 @@ class ReferenceCapsExample
     let x1 = Sample
     // let x2: Sample iso = Sample
     let x2' = recover iso Sample end
+
+    let x3: Sample iso = recover iso
+      let s = Sample
+      s.>replace("Hallo".clone())
+    end
     // let x3: Sample val = Sample
     
     let s4: String trn = "This is trn".clone()
@@ -338,6 +350,8 @@ class ObjectLiteralExample
     end
 
     l("Hallo", env.out)
+
+    l~apply(where out=env.out)("Hallo")
 
 
 class MethodHandler
@@ -456,6 +470,50 @@ class MathsExample
     // GCD
     env.out.print("GCD(42, 12) = " + try GreatestCommonDivisor[I64](42, 12)?.string() else "??" end)
 
+
+primitive ActorRunningExample
+
+  fun apply(env: Env) =>
+    let path = FilePath(FileAuth(env.root), "test.bin")
+
+    let f = recover iso match OpenFile(path)
+    | let f': File => f'
+    else
+      Debug("Could not open file")
+      return
+    end
+    end
+
+    let a = FileCounter(env, consume f)
+    a.do_loop()
+
+   // a.do_recursive()
+
+actor FileCounter
+  let env: Env
+  var l: USize val = 0
+  var f: File ref
+
+  new create(env': Env, f': File iso) =>
+    env = env'
+    f = consume f'
+
+  be count(b: Array[U8 val] iso) =>
+    l = l + b.size()
+    env.out.print("Size: " + l.string())
+
+  be do_loop() =>
+    while f.errno() is FileOK do
+      count(f.read(1024))
+    end
+
+  be do_recursive(i: USize val = 0) =>
+    if f.errno() is FileOK then
+      count(f.read(1024))
+      do_recursive()
+    end
+
+
 type Record is (F64 val | I64 val | Bool val | None val | String val | JsonArray ref | JsonObject ref)
 
 class NetworkExample
@@ -496,6 +554,7 @@ class NetworkExample
     let obj: JsonObject iso = recover iso JsonObject.from_map(consume x) end
 
     client.post(url, consume obj, p2)
+
 
 class ToBody
   fun apply(p: Payload val): Array[ByteSeq] val? =>
