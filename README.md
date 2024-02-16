@@ -35,6 +35,16 @@ ponyc
 # Compile with debug options, options and dependencies
 corral run -- ponyc -Dopenssl_3.0.x --debug --output build/ src/project
 ```
+
+### Makefile
+
+In this repo you can use the makefile to build the different projects:
+
+```
+make fetch # to get all the dependencies
+make all # to build all the projects
+```
+
 ## Language Fundamentals
 
 ### Type system

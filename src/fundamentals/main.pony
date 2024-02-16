@@ -191,8 +191,13 @@ class TypingExample
     U32(1)
 
   fun apply(env: Env) =>
+
+    let x: U64 = 'Hallo'
+    env.out.print("'Hallo' = " + x.string())
+
     let f = recover val Foo(1, 3) end
     f.takes_stuff(U32(1))
+    
 
     f.takes_generic[U32 box](U32(1))
     f.takes_generic[String box]("Hallo")
@@ -221,7 +226,7 @@ class TypingExample
 // Reference capabilities
 
 class ref Sample
-var x: String iso
+  var x: String iso
 
   new ref create() =>
     x = "Hello".clone()
@@ -260,7 +265,6 @@ class ReferenceCapsExample
 //    This works:
     needs_val(consume s2)
 
-  
   // But now s2 isn't usable anymore
     s2 = "This is iso".clone()
 
@@ -479,7 +483,7 @@ primitive ActorRunningExample
     let f = recover iso match OpenFile(path)
     | let f': File => f'
     else
-      Debug("Could not open file")
+      Debug("Could not open file 'test.bin'")
       return
     end
     end

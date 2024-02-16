@@ -1,31 +1,34 @@
-build = build
-src = src/
+.PHONY: test fundamentals rover clean fetch
 
-.PHONY: fundamentals rover clean
+fetch:
+	corral fetch
 
-all: fundamentals rover server-test
+all: fundamentals rover server-test test
 
 debug: FLAGS=--debug
 debug: all
 
-fundamentals: $(build)fundamentals
-rover: $(build)rover
-server-test: $(build)server-test
+fundamentals: build/fundamentals
+rover: build/rover
+server-test: build/server-test
+test: build/test
+	./build/test
 
-$(build)fundamentals: $(src)fundamentals/*
-	corral fetch
-	@mkdir -p $(build)
-	corral run -- ponyc -Dopenssl_3.0.x $(FLAGS) --output $(build) $(src)fundamentals
+build/fundamentals: src/fundamentals/*
+	@mkdir -p build
+	corral run -- ponyc -Dopenssl_3.0.x $(FLAGS) --output build src/fundamentals
 
-$(build)rover: $(src)rover/*
-	corral fetch
-	@mkdir -p $(build)
-	corral run -- ponyc $(FLAGS) -Dopenssl_3.0.x --output $(build) $(src)rover
+build/rover: src/rover/*
+	@mkdir -p build
+	corral run -- ponyc $(FLAGS) -Dopenssl_3.0.x --output build src/rover
 
-$(build)server-test: $(src)server-test/*
-	corral fetch
-	@mkdir -p $(build)
-	corral run -- ponyc -Dopenssl_3.0.x $(FLAGS) --output $(build) $(src)server-test
+build/server-test: src/server-test/*
+	@mkdir -p build
+	corral run -- ponyc -Dopenssl_3.0.x $(FLAGS) --output build src/server-test
+
+build/test: src/fundamentals/test/*
+	@mkdir -p build
+	corral run -- ponyc -Dopenssl_3.0.x $(FLAGS) --output build src/fundamentals/test
 
 clean:
 	corral clean
