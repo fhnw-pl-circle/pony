@@ -31,6 +31,8 @@ use "cli"
 
 use @printf[I32](fmt: Pointer[U8] tag, ...)
 
+use @pony_ctx[Pointer[None]]()
+use @pony_triggergc[None](ctx: Pointer[None])
 use "lib:curl" if linux or osx
 // these booleans are available at compile time:
 // windows, freebsd, osx, posix, x86, arm, lp64, llp64, ilp32, native128, debug
@@ -489,32 +491,42 @@ primitive ActorRunningExample
     end
 
     let a = FileCounter(env, consume f)
-    a.do_loop()
+    // a.do_loop()
 
-   // a.do_recursive()
+    a.do_recursive()
+
+actor Counter
+  var l: USize val = 0
+
+  be count(b: Array[U8 val] iso) =>
+    l = l + b.size()
+    Debug(l)
 
 actor FileCounter
   let env: Env
   var l: USize val = 0
   var f: File ref
+  let c: Counter = Counter
 
   new create(env': Env, f': File iso) =>
     env = env'
+
     f = consume f'
 
   be count(b: Array[U8 val] iso) =>
     l = l + b.size()
-    env.out.print("Size: " + l.string())
+    //env.out.print("Size: " + l.string())
 
   be do_loop() =>
     while f.errno() is FileOK do
-      count(f.read(1024))
+      c.count(f.read(1024))
     end
 
   be do_recursive(i: USize val = 0) =>
     if f.errno() is FileOK then
       count(f.read(1024))
       do_recursive()
+     // @pony_triggergc(@pony_ctx())
     end
 
 
@@ -551,9 +563,14 @@ class NetworkExample
       }))
 
       
-    let x = recover iso HashMap[String val, Record, HashEq[String val] val].create() end
+    var x = recover iso HashMap[String val, Record, HashEq[String val] val].create() end
 
+    // Automatic receiver recovery => 
+    // fun ref update(String val, String val) called with iso
+    
     x("key") = "value"
+    // actually something like this:
+    // x = recover iso let x' = consume x; x'("key") = "value"; consume x' end
 
     let obj: JsonObject iso = recover iso JsonObject.from_map(consume x) end
 
