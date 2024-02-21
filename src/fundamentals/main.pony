@@ -1,5 +1,6 @@
 // This file contains examples for the following langauge features of pony
 
+
 // - interfaces and traits, subtyping
 // - generics
 // - simple actor
@@ -27,7 +28,7 @@ use "promises"
 use "serialise"
 use "math"
 use "cli"
-
+use "term"
 
 use @printf[I32](fmt: Pointer[U8] tag, ...)
 
@@ -42,6 +43,7 @@ use @curl_easy_init[Pointer[_CURL]]()
 use @curl_easy_setopt[U8](curl: Pointer[_CURL], option: U16, ...)
 use @curl_easy_perform[U8](curl: Pointer[_CURL])
 
+
 actor Main
   new create(env: Env) =>
     let cs = 
@@ -50,7 +52,7 @@ actor Main
         for name in [
           "typing"; "reference-caps"; "object-caps"; "errors"
           "object-literals"; "maths"; "c-ffi"; "network"
-          "serialize"; "debug"; "methods"; "running"
+          "serialize"; "debug"; "methods"; "running"; "readline"
           ].values() do
           parent.add_command(
             CommandSpec.leaf(name)?
@@ -88,6 +90,7 @@ actor Main
     | "network" => NetworkExample(env)
     | "serialize" => SerializationExample(env)
     | "debug" => DebugExample(env)
+    | "readline" => StdinExample(env)
     else
       env.out.print("Command didn't match...")
     end
@@ -96,7 +99,7 @@ actor Main
 class Foo
   let x: U32
   var z: U32
-  
+
   new create(x': U32, z': U32) =>
     x = x'
     z = z'
@@ -119,7 +122,6 @@ class Foo
     a.string()
 
 
-
 actor Actor 
   let env: Env
 
@@ -130,9 +132,7 @@ actor Actor
     env.out.print("I got: " + x.string())
 
 
-
 // interfaces can be used for nominal and structural subtyping
-
 class Bar is Stringable
   // Compiler generates an error if we don't provide this method
   fun string(): String iso^ => "Hello".clone()
@@ -158,6 +158,7 @@ trait Named
 class Tom is Named
   fun name(): String => "Tom"
 
+
 class NotNamed
   fun greeting(): String => "Hi!"
 
@@ -177,6 +178,7 @@ primitive Left
 primitive Right
 
 type Direction is (Left | Right)
+
 
 class TypingExample
 
@@ -199,7 +201,6 @@ class TypingExample
 
     let f = recover val Foo(1, 3) end
     f.takes_stuff(U32(1))
-    
 
     f.takes_generic[U32 box](U32(1))
     f.takes_generic[String box]("Hallo")
@@ -225,8 +226,8 @@ class TypingExample
     takes_direction(left)
     //taker_color(left)
 
-// Reference capabilities
 
+// Reference capabilities
 class ref Sample
   var x: String iso
 
@@ -318,6 +319,7 @@ class ReferenceCapsExample
 
     x1.replace("World".clone())
 
+
 class ObjectCapsExample
   fun apply(env: Env) =>
     let file_name = "hello.txt"
@@ -390,6 +392,7 @@ class MethodPassing
 
     handler.print(env.out, provider~multiple(where x = 1))
     handler.print(env.out, provider~multiple(where y = 13))
+
 
 class Disposable
 
@@ -495,12 +498,14 @@ primitive ActorRunningExample
 
     a.do_recursive()
 
+
 actor Counter
   var l: USize val = 0
 
   be count(b: Array[U8 val] iso) =>
     l = l + b.size()
     Debug(l)
+
 
 actor FileCounter
   let env: Env
@@ -532,6 +537,7 @@ actor FileCounter
 
 type Record is (F64 val | I64 val | Bool val | None val | String val | JsonArray ref | JsonObject ref)
 
+
 class NetworkExample
   fun apply(env: Env) =>
     let client = NetworkClient(TCPConnectAuth(env.root))
@@ -562,12 +568,10 @@ class NetworkExample
         end
       }))
 
-      
     var x = recover iso HashMap[String val, Record, HashEq[String val] val].create() end
 
     // Automatic receiver recovery => 
     // fun ref update(String val, String val) called with iso
-    
     x("key") = "value"
     // actually something like this:
     // x = recover iso let x' = consume x; x'("key") = "value"; consume x' end
@@ -611,10 +615,10 @@ class MyHandler is HTTPHandler
   new create(promise': Promise[Payload val], session': HTTPSession) =>
     promise = promise'
     session = session'
-  
+
   fun ref apply(payload: Payload val): None tag =>
     promise(payload)
-    
+
 
 actor NetworkClient
   let auth: TCPConnectAuth
@@ -649,13 +653,12 @@ actor NetworkClient
       promise.reject()
     end
 
-// C-FFI
 
+// C-FFI
 primitive _CURL
 primitive _CURLcode
 
 class CFFIExample
-
   fun apply(env: Env) =>
 
     let a: F32 = 3.1
@@ -708,11 +711,52 @@ class SerializationExample
 
 
 class DebugExample
+  fun apply(env: Env) =>
+    debug_test()
+    env.out.print("This is always printed")
 
   fun debug_test() =>
     Debug.out("This is only printed when compiled with --debug")
 
+
+class MyLineNotify is ReadlineNotify
+  let out: OutStream
+  let commands: List[String] = List[String].from(["q"; "white"; "red"; "reset"])
+
+  new create(out': OutStream) =>
+    out = out'
+
+  fun ref apply(line: String val, prompt: Promise[String val] tag) =>
+    match line
+    | "q" => prompt.reject()
+    | "white" => out.print(ANSI.white())
+    | "red" => out.print(ANSI.red())
+    | "reset" => out.print(ANSI.reset())
+    else
+      try
+        let x = line.u64()?
+        out.print((x * 2).string())
+      else
+        out.print("Not a number: '" + line + "'")
+      end
+    end
+    prompt("Enter Number: ")
+
+  fun ref tab(line: String val): Seq[String val] box =>
+    commands.filter({(s: String): Bool => s.compare_sub(line, line.size()) == Equal })
+
+
+class StdinExample
   fun apply(env: Env) =>
-    debug_test()
-    env.out.print("This is always printed")
-    
+    let term = ANSITerm(
+      Readline(MyLineNotify(env.out), env.out),
+      env.input
+    )
+
+    env.input(
+      object iso is InputNotify
+        fun ref apply(data: Array[U8] iso) =>
+          term(consume data)
+      end
+    )
+    term.prompt("Start by entering a number: ")
