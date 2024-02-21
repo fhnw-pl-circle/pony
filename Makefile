@@ -11,6 +11,10 @@ debug: all
 fundamentals: build/fundamentals
 rover: build/rover
 server-test: build/server-test
+
+bench: build/benchmark
+	./build/benchmark
+
 test: build/test
 	./build/test
 
@@ -29,6 +33,10 @@ build/server-test: src/server-test/*
 build/test: src/fundamentals/test/*
 	@mkdir -p build
 	corral run -- ponyc -Dopenssl_3.0.x $(FLAGS) --output build src/fundamentals/test
+
+build/benchmark: src/fundamentals/benchmark/*
+	@mkdir -p build
+	corral run -- ponyc -Dopenssl_3.0.x $(FLAGS) --output build src/fundamentals/benchmark
 
 clean:
 	corral clean
