@@ -721,7 +721,9 @@ class DebugExample
 
 class MyLineNotify is ReadlineNotify
   let out: OutStream
-  let commands: List[String] = List[String].from(["q"; "white"; "red"; "reset"])
+  let commands: List[String] = List[String].from([
+    "q"; "white"; "red"; "reset"; "blue"; "green"; "black"
+  ])
 
   new create(out': OutStream) =>
     out = out'
@@ -732,6 +734,9 @@ class MyLineNotify is ReadlineNotify
     | "white" => out.print(ANSI.white())
     | "red" => out.print(ANSI.red())
     | "reset" => out.print(ANSI.reset())
+    | "green" => out.print(ANSI.green())
+    | "blue" => out.print(ANSI.blue())
+    | "black" => out.print(ANSI.black())
     else
       try
         let x = line.u64()?
